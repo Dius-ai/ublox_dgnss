@@ -310,6 +310,11 @@ const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB =
 const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_ODO_USB =
 {"CFG_MSGOUT_UBX_NAV_ODO_USB", 0x20910081, U1, 0, NA};
 // end NAV-ODO exclusion - following MSGOUT items apply to all families
+// UBX-NAV-PL protection level - F9P only until F9R and X20P firmware are checked
+// @only: F9P
+const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_PL_USB =
+{"CFG_MSGOUT_UBX_NAV_PL_USB", 0x20910418, U1, 0, NA};
+// end NAV-PL restriction - following MSGOUT items apply to all families
 const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_ORB_USB =
 {"CFG_MSGOUT_UBX_NAV_ORB_USB", 0x20910013, U1, 0, NA};
 const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_SAT_USB =
@@ -569,6 +574,7 @@ ubx_cfg_item_map_t ubxKeyCfgItemMap = {
   {CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB},
   {CFG_MSGOUT_UBX_NAV_ODO_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_ODO_USB},
   {CFG_MSGOUT_UBX_NAV_ORB_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_ORB_USB},
+  {CFG_MSGOUT_UBX_NAV_PL_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_PL_USB},
   {CFG_MSGOUT_UBX_NAV_SAT_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_SAT_USB},
   {CFG_MSGOUT_UBX_NAV_SIG_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_SIG_USB},
   {CFG_MSGOUT_UBX_NAV_PVT_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_PVT_USB},

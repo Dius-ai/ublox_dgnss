@@ -7,7 +7,7 @@
 device_family = "F9P"
 description = "ZED-F9P baseline configuration"
 version = "1.0"
-parameter_count = 127
+parameter_count = 128
 
 [parameters]
 include = [
@@ -39,6 +39,7 @@ include = [
     "CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB",
     "CFG_MSGOUT_UBX_NAV_ODO_USB",
     "CFG_MSGOUT_UBX_NAV_ORB_USB",
+    "CFG_MSGOUT_UBX_NAV_PL_USB",
     "CFG_MSGOUT_UBX_NAV_POSECEF_USB",
     "CFG_MSGOUT_UBX_NAV_POSLLH_USB",
     "CFG_MSGOUT_UBX_NAV_PVT_USB",

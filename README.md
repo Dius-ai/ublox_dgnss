@@ -124,6 +124,7 @@ Values will be as described in the integration manual (without scaling applied).
   CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB
   CFG_MSGOUT_UBX_NAV_ODO_USB
   CFG_MSGOUT_UBX_NAV_ORB_USB
+  CFG_MSGOUT_UBX_NAV_PL_USB (F9P only)
   CFG_MSGOUT_UBX_NAV_SAT_USB
   CFG_MSGOUT_UBX_NAV_SIG_USB
   CFG_MSGOUT_UBX_NAV_POSECEF_USB
@@ -259,6 +260,7 @@ The following messages may be outputted. They included a `std_msgs/Header header
 /ubx_nav_hp_pos_llh
 /ubx_nav_odo
 /ubx_nav_orb
+/ubx_nav_pl
 /ubx_nav_sat
 /ubx_nav_sig
 /ubx_nav_pos_ecef

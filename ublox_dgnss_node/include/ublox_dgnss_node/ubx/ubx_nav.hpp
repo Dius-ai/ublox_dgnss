@@ -30,6 +30,7 @@
 #include "ublox_dgnss_node/ubx/nav/ubx_nav_hpposllh.hpp"
 #include "ublox_dgnss_node/ubx/nav/ubx_nav_odo.hpp"
 #include "ublox_dgnss_node/ubx/nav/ubx_nav_orb.hpp"
+#include "ublox_dgnss_node/ubx/nav/ubx_nav_pl.hpp"
 #include "ublox_dgnss_node/ubx/nav/ubx_nav_sat.hpp"
 #include "ublox_dgnss_node/ubx/nav/ubx_nav_sig.hpp"
 #include "ublox_dgnss_node/ubx/nav/ubx_nav_resetodo.hpp"
@@ -55,6 +56,7 @@ typedef UBXFrameComms<nav::posllh::NavPosLLHPayload, usb::Connection> UbxNavPosL
 typedef UBXFrameComms<nav::hpposllh::NavHPPosLLHPayload, usb::Connection> UbxNavHPPosLLHFrameComms;
 typedef UBXFrameComms<nav::odo::NavOdoPayload, usb::Connection> UbxNavOdoFrameComms;
 typedef UBXFrameComms<nav::orb::NavOrbPayload, usb::Connection> UbxNavOrbFrameComms;
+typedef UBXFrameComms<nav::pl::NavPLPayload, usb::Connection> UbxNavPLFrameComms;
 typedef UBXFrameComms<nav::sat::NavSatPayload, usb::Connection> UbxNavSatFrameComms;
 typedef UBXFrameComms<nav::sig::NavSigPayload, usb::Connection> UbxNavSigFrameComms;
 typedef UBXFrameComms<nav::resetodo::NavResetOdoPayload, usb::Connection> UbxNavResetOdoFrameComms;
@@ -82,6 +84,7 @@ private:
   std::shared_ptr<UbxNavHPPosLLHFrameComms> hpposllh_;
   std::shared_ptr<UbxNavOdoFrameComms> odo_;
   std::shared_ptr<UbxNavOrbFrameComms> orb_;
+  std::shared_ptr<UbxNavPLFrameComms> pl_;
   std::shared_ptr<UbxNavSatFrameComms> sat_;
   std::shared_ptr<UbxNavSigFrameComms> sig_;
   std::shared_ptr<UbxNavResetOdoFrameComms> resetodo_;
@@ -107,6 +110,7 @@ public:
     hpposllh_ = std::make_shared<UbxNavHPPosLLHFrameComms>(usbc_);
     odo_ = std::make_shared<UbxNavOdoFrameComms>(usbc_);
     orb_ = std::make_shared<UbxNavOrbFrameComms>(usbc_);
+    pl_ = std::make_shared<UbxNavPLFrameComms>(usbc_);
     sat_ = std::make_shared<UbxNavSatFrameComms>(usbc_);
     sig_ = std::make_shared<UbxNavSigFrameComms>(usbc_);
     resetodo_ = std::make_shared<UbxNavResetOdoFrameComms>(usbc_);
@@ -158,6 +162,10 @@ public:
   std::shared_ptr<UbxNavOrbFrameComms> orb()
   {
     return orb_;
+  }
+  std::shared_ptr<UbxNavPLFrameComms> pl()
+  {
+    return pl_;
   }
   std::shared_ptr<UbxNavSatFrameComms> sat()
   {
@@ -213,6 +221,9 @@ public:
         break;
       case ubx::UBX_NAV_EOE:
         eoe_->frame(frame);
+        break;
+      case ubx::UBX_NAV_PL:
+        pl_->frame(frame);
         break;
       case ubx::UBX_NAV_POSLLH:
         posllh_->frame(frame);

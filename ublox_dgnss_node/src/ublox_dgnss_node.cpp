@@ -47,6 +47,7 @@
 #include "ublox_ubx_msgs/msg/ubx_nav_hp_pos_llh.hpp"
 #include "ublox_ubx_msgs/msg/ubx_nav_odo.hpp"
 #include "ublox_ubx_msgs/msg/ubx_nav_orb.hpp"
+#include "ublox_ubx_msgs/msg/ubx_nav_pl.hpp"
 #include "ublox_ubx_msgs/msg/ubx_nav_sat.hpp"
 #include "ublox_ubx_msgs/msg/ubx_nav_sig.hpp"
 #include "ublox_ubx_msgs/msg/ubx_nav_pos_ecef.hpp"
@@ -240,6 +241,8 @@ public:
     }
     ubx_nav_orb_pub_ = this->create_publisher<ublox_ubx_msgs::msg::UBXNavOrb>(
       "ubx_nav_orb", qos, pub_options);
+    ubx_nav_pl_pub_ = this->create_publisher<ublox_ubx_msgs::msg::UBXNavPL>(
+      "ubx_nav_pl", qos, pub_options);
     ubx_nav_sat_pub_ = this->create_publisher<ublox_ubx_msgs::msg::UBXNavSat>(
       "ubx_nav_sat", qos, pub_options);
     ubx_nav_sig_pub_ = this->create_publisher<ublox_ubx_msgs::msg::UBXNavSig>(
@@ -701,6 +704,7 @@ private:
   rclcpp::Publisher<ublox_ubx_msgs::msg::UBXNavHPPosLLH>::SharedPtr ubx_nav_hp_pos_llh_pub_;
   rclcpp::Publisher<ublox_ubx_msgs::msg::UBXNavOdo>::SharedPtr ubx_nav_odo_pub_;
   rclcpp::Publisher<ublox_ubx_msgs::msg::UBXNavOrb>::SharedPtr ubx_nav_orb_pub_;
+  rclcpp::Publisher<ublox_ubx_msgs::msg::UBXNavPL>::SharedPtr ubx_nav_pl_pub_;
   rclcpp::Publisher<ublox_ubx_msgs::msg::UBXNavSat>::SharedPtr ubx_nav_sat_pub_;
   rclcpp::Publisher<ublox_ubx_msgs::msg::UBXNavSig>::SharedPtr ubx_nav_sig_pub_;
   rclcpp::Publisher<ublox_ubx_msgs::msg::UBXNavPosECEF>::SharedPtr ubx_nav_pos_ecef_pub_;
@@ -2258,6 +2262,12 @@ private:
           f->ubx_frame->msg_class,
           f->ubx_frame->msg_id);
         break;
+      case ubx::UBX_NAV_PL:
+        RCLCPP_DEBUG(
+          get_logger(), "ubx class: 0x%02x id: 0x%02x nav pl poll sent to usb device",
+          f->ubx_frame->msg_class,
+          f->ubx_frame->msg_id);
+        break;
       case ubx::UBX_NAV_POSECEF:
         RCLCPP_DEBUG(
           get_logger(), "ubx class: 0x%02x id: 0x%02x nav pos ecef poll sent to usb device",
@@ -2708,6 +2718,9 @@ private:
         break;
       case ubx::UBX_NAV_DOP:
         ubx_nav_dop_pub(f, ubx_nav_->dop()->payload());
+        break;
+      case ubx::UBX_NAV_PL:
+        ubx_nav_pl_pub(f, ubx_nav_->pl()->payload());
         break;
       case ubx::UBX_NAV_EOE:
         ubx_nav_eoe_pub(f, ubx_nav_->eoe()->payload());
@@ -3426,6 +3439,41 @@ private:
     msg->e_dop = payload->eDOP;
 
     ubx_nav_dop_pub_->publish(*msg);
+  }
+
+  UBLOX_DGNSS_NODE_LOCAL
+  void ubx_nav_pl_pub(
+    ubx_queue_frame_t * f,
+    std::shared_ptr<ubx::nav::pl::NavPLPayload> payload)
+  {
+    RCLCPP_DEBUG(
+      get_logger(), "ubx class: 0x%02x id: 0x%02x nav pl payload - %s",
+      f->ubx_frame->msg_class, f->ubx_frame->msg_id,
+      payload->to_string().c_str());
+
+    auto msg = std::make_unique<ublox_ubx_msgs::msg::UBXNavPL>();
+    msg->header.frame_id = frame_id_;
+    msg->header.stamp = f->ts;
+    msg->version = payload->version;
+    msg->tmir_coeff = payload->tmirCoeff;
+    msg->tmir_exp = payload->tmirExp;
+    msg->pl_pos_valid = static_cast<bool>(payload->plPosValid);
+    msg->pl_pos_frame = payload->plPosFrame;
+    msg->pl_vel_valid = static_cast<bool>(payload->plVelValid);
+    msg->pl_vel_frame = payload->plVelFrame;
+    msg->pl_time_valid = static_cast<bool>(payload->plTimeValid);
+    msg->itow = payload->iTOW;
+    msg->pl_pos_1 = payload->plPos1;
+    msg->pl_pos_2 = payload->plPos2;
+    msg->pl_pos_3 = payload->plPos3;
+    msg->pl_vel_1 = payload->plVel1;
+    msg->pl_vel_2 = payload->plVel2;
+    msg->pl_vel_3 = payload->plVel3;
+    msg->pl_pos_horiz_orient = payload->plPosHorizOrient;
+    msg->pl_vel_horiz_orient = payload->plVelHorizOrient;
+    msg->pl_time = payload->plTime;
+
+    ubx_nav_pl_pub_->publish(*msg);
   }
 
   UBLOX_DGNSS_NODE_LOCAL
