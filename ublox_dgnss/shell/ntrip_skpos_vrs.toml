@@ -1,0 +1,26 @@
+# rtv_ntrip_bridge: SKPOS VRS -> ZED-F9P through the ublox_dgnss pty link (the driver owns the
+# USB device). Used by ublox_vrs_bringup.sh, which sets serial.device to the driver's pty_link.
+# All keys: config/example.toml and README.md in rtv_ntrip_core_client_rust.
+
+[caster]
+host = "skpos.gku.sk"
+port = 2101
+mountpoint = "SKPOS_CM_32"      # VRS: needs our position (GGA)
+username_env = "SKPOS_USER"     # credentials only from the environment (~/.skpos_env)
+password_env = "SKPOS_PASS"
+tls = false                     # SKPOS offers no TLS
+
+[reconnect]
+vrs_reconnect_distance_km = 5.0  # SKPOS ignores in-stream GGA: reconnect for a new VRS
+
+[serial]
+device = "/run/user/1000/ublox_dgnss"  # replaced by ublox_vrs_bringup.sh with the pty link
+baud = 115200                          # ignored on a pty
+
+[gga]
+source = "receiver"              # the receiver's GGA, relayed by the driver
+
+[status]
+socket_name = "rtv_ntrip_bridge"
+interval_ms = 1000
+log_summary_s = 30.0

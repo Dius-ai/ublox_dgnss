@@ -23,6 +23,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <atomic>
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_components/register_node_macro.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
@@ -30,6 +31,8 @@
 #include "ublox_dgnss_node/usb.hpp"
 #include "ublox_dgnss_node/parameters.hpp"
 #include "ublox_dgnss_node/device_family.hpp"
+#include "ublox_dgnss_node/pty_link.hpp"
+#include "ublox_dgnss_node/stream_parser.hpp"
 #include "ublox_dgnss_node/ubx/ubx_config_loader.hpp"
 #include "ublox_dgnss_node/ubx/ubx_cfg.hpp"
 #include "ublox_dgnss_node/ubx/ubx_mon.hpp"
@@ -442,6 +445,9 @@ public:
         sub_options);
     }
 
+    // TODO(review): New opt-in pty link (PTY_LINK_PATH) for serial NTRIP clients (VRS)
+    setup_pty_link();
+
     RCLCPP_DEBUG(get_logger(), "initialising all ublox configuration parameters...");
     ublox_init_all_cfg_params();
 
@@ -658,6 +664,26 @@ private:
 
   rclcpp::TimerBase::SharedPtr ubx_timer_;
   rclcpp::TimerBase::SharedPtr rtcm_timer_;
+
+  // TODO(review): New pty link for serial NTRIP clients (VRS), active only with PTY_LINK_PATH.
+  // The stream parser replaces the per-transfer message detection in ublox_in_callback only
+  // while the pty link is active; it runs on the libusb events thread (stream_mutex_ guards its
+  // stats for the summary timer). The pty is read by pty_timer_ and written from the USB thread.
+  const std::string PTY_LINK_PATH_PARAM_NAME = "PTY_LINK_PATH";
+  rclcpp::CallbackGroup::SharedPtr callback_group_pty_timer_;
+  rclcpp::TimerBase::SharedPtr pty_timer_;
+  rclcpp::TimerBase::SharedPtr pty_summary_timer_;
+  std::unique_ptr<ublox_dgnss::StreamParser> stream_parser_;
+  std::mutex stream_mutex_;
+  rclcpp::Time stream_rx_ts_;
+  ublox_dgnss::PtyLink pty_;
+  std::mutex pty_mutex_;
+  std::atomic<uint64_t> pty_gga_sent_{0};
+  std::atomic<uint64_t> pty_gga_dropped_{0};
+  std::atomic<uint64_t> pty_gga_unread_{0};
+  uint64_t pty_bytes_to_device_ = 0;
+  uint64_t pty_bytes_dropped_ = 0;
+  bool usb_pty_detached_logged_ = false;
 
 // once the usb is initialised this timer is disabled
   rclcpp::TimerBase::SharedPtr usb_init_timer_;
@@ -1620,6 +1646,22 @@ public:
     }
     */
 
+    // TODO(review): New stream parsing while the pty link is active: a USB transfer may hold
+    // several messages or part of one, and the GGA for the NTRIP client must not be lost.
+    // Without the pty link the original per-transfer handling below runs unchanged.
+    if (stream_parser_) {
+      if (len > 0) {
+        const std::lock_guard<std::mutex> lock(stream_mutex_);
+        stream_rx_ts_ = ts;
+        stream_parser_->feed(buf, len);
+      }
+      size_t num_queued = usbc_->queued_transfer_in_num();
+      if (num_queued > 1) {
+        RCLCPP_WARN(get_logger(), "too many transfer in transfers are queued (%lu)", num_queued);
+      }
+      return;
+    }
+
     if (len > 0) {
       // NMEA string starts with a $
       if (buf[0] == 0x24) {
@@ -1676,6 +1718,158 @@ public:
       RCLCPP_WARN(
         get_logger(), "too many transfer in transfers are queued (%lu)", num_transfer_in_queued);
     }
+  }
+
+  // TODO(review): New pty link (PTY_LINK_PATH) for serial NTRIP clients such as VRS casters
+  // that need the receiver's GGA. Empty (default) = off: no pty, no stream parser, no change.
+  UBLOX_DGNSS_NODE_LOCAL
+  void setup_pty_link()
+  {
+    if (!this->has_parameter(PTY_LINK_PATH_PARAM_NAME)) {
+      this->declare_parameter<std::string>(PTY_LINK_PATH_PARAM_NAME, "");
+    }
+    const std::string path = this->get_parameter(PTY_LINK_PATH_PARAM_NAME).as_string();
+    if (path.empty()) {
+      RCLCPP_INFO(get_logger(), "%s not set - no pty link", PTY_LINK_PATH_PARAM_NAME.c_str());
+      return;
+    }
+    try {
+      pty_.open(path);
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(
+        get_logger(), "pty link %s could not be created, NTRIP client cannot connect: %s",
+        path.c_str(), e.what());
+      return;
+    }
+    RCLCPP_INFO(
+      get_logger(), "pty link %s -> %s: receiver GGA out, RTCM from the client to the receiver",
+      pty_.link_path().c_str(), pty_.slave_path().c_str());
+
+    stream_parser_ = std::make_unique<ublox_dgnss::StreamParser>(
+      std::bind(&UbloxDGNSSNode::on_stream_frame, this, std::placeholders::_1));
+
+    callback_group_pty_timer_ =
+      create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    pty_timer_ = create_wall_timer(
+      10ms, std::bind(&UbloxDGNSSNode::pty_timer_callback, this), callback_group_pty_timer_);
+    pty_summary_timer_ = create_wall_timer(
+      30s, std::bind(&UbloxDGNSSNode::pty_summary_callback, this), callback_group_pty_timer_);
+  }
+
+  // Called by stream_parser_ on the libusb events thread with stream_mutex_ held.
+  UBLOX_DGNSS_NODE_LOCAL
+  void on_stream_frame(const ublox_dgnss::StreamFrame & f)
+  {
+    switch (f.kind) {
+      case ublox_dgnss::StreamFrame::Kind::UBX: {
+          auto frame = std::make_shared<ubx::Frame>();
+          frame->buf = f.bytes;
+          frame->from_buf_build();
+          ubx_queue_frame_t queue_frame {stream_rx_ts_, frame, FrameType::frame_in};
+          const std::lock_guard<std::mutex> lock(ubx_queue_mutex_);
+          ubx_queue_.push_back(queue_frame);
+          break;
+        }
+      case ublox_dgnss::StreamFrame::Kind::RTCM3: {
+          rtcm_queue_frame_t queue_frame {stream_rx_ts_, f.bytes, FrameType::frame_in};
+          const std::lock_guard<std::mutex> lock(rtcm_queue_mutex_);
+          rtcm_queue_.push_back(queue_frame);
+          break;
+        }
+      case ublox_dgnss::StreamFrame::Kind::NMEA: {
+          const std::string sentence(f.bytes.begin(), f.bytes.end());
+          RCLCPP_DEBUG(get_logger(), "nmea: %s", sentence.c_str());
+          if (ublox_dgnss::nmea_sentence_type(sentence) == "GGA") {
+            send_gga_to_pty(sentence);
+          }
+          break;
+        }
+    }
+  }
+
+  UBLOX_DGNSS_NODE_LOCAL
+  void send_gga_to_pty(const std::string & sentence)
+  {
+    const std::string line = sentence + "\r\n";
+    size_t unread = 0;
+    bool sent = false;
+    try {
+      const std::lock_guard<std::mutex> lock(pty_mutex_);
+      sent = pty_.write(reinterpret_cast<const uint8_t *>(line.data()), line.size(), &unread);
+    } catch (const std::exception & e) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 10000, "pty link: GGA write failed: %s", e.what());
+    }
+    if (sent) {
+      if (pty_gga_sent_++ == 0) {
+        RCLCPP_INFO(get_logger(), "pty link: first GGA sent to the NTRIP client");
+      }
+    } else {
+      ++pty_gga_dropped_;
+    }
+    if (unread > 0) {
+      ++pty_gga_unread_;  // the previous GGA was not read: no client, or it is not reading
+    }
+  }
+
+  // Forwards what the NTRIP client wrote (RTCM 3) to the receiver; dropped while the receiver is
+  // away, as stale corrections are of no use once it is back.
+  UBLOX_DGNSS_NODE_LOCAL
+  void pty_timer_callback()
+  {
+    if (!keep_running_) {
+      return;
+    }
+    uint8_t buf[4096];
+    for (int i = 0; i < 16; ++i) {
+      size_t n = 0;
+      try {
+        const std::lock_guard<std::mutex> lock(pty_mutex_);
+        n = pty_.read(buf, sizeof(buf));
+      } catch (const std::exception & e) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 10000, "pty link: read failed: %s", e.what());
+        return;
+      }
+      if (n == 0) {
+        return;
+      }
+      if (!usb_ready_for_rxm_input("RTCM from the pty link", usb_pty_detached_logged_)) {
+        pty_bytes_dropped_ += n;
+        continue;
+      }
+      try {
+        usbc_->write_buffer(buf, n);
+        if (pty_bytes_to_device_ == 0) {
+          RCLCPP_INFO(get_logger(), "pty link: first corrections forwarded to the receiver");
+        }
+        pty_bytes_to_device_ += n;
+      } catch (const usb::UsbException & e) {
+        pty_bytes_dropped_ += n;
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 10000, "pty link: RTCM write to the receiver failed: %s",
+          e.what());
+      }
+    }
+  }
+
+  UBLOX_DGNSS_NODE_LOCAL
+  void pty_summary_callback()
+  {
+    ublox_dgnss::StreamParserStats s;
+    {
+      const std::lock_guard<std::mutex> lock(stream_mutex_);
+      s = stream_parser_->stats();
+    }
+    RCLCPP_INFO(
+      get_logger(),
+      "pty link: GGA sent %lu dropped %lu unread %lu; corrections to receiver %lu B, dropped %lu B;"
+      " stream ubx %lu nmea %lu rtcm %lu, errors ubx_ck %lu ubx_hdr %lu nmea %lu rtcm_crc %lu,"
+      " garbage %lu B",
+      pty_gga_sent_.load(), pty_gga_dropped_.load(), pty_gga_unread_.load(),
+      pty_bytes_to_device_, pty_bytes_dropped_,
+      s.ubx_frames, s.nmea_sentences, s.rtcm3_frames, s.ubx_checksum_errors,
+      s.ubx_header_errors, s.nmea_errors, s.rtcm3_crc_errors, s.garbage_bytes);
   }
 
 // handle out to ublox gps device to host callback

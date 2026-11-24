@@ -81,6 +81,18 @@ const ubx_cfg_item_t CFG_USBOUTPROT_NMEA = {"CFG_USBOUTPROT_NMEA", 0x10780002, L
 // @exclude: F9R
 const ubx_cfg_item_t CFG_USBOUTPROT_RTCM3X = {"CFG_USBOUTPROT_RTCM3X", 0x10780004, L, 1, NA};
 
+// cfg i2coutprot, spioutprot - output on the unused I2C and SPI ports; switched off in the
+// VRS rover profile, as their factory-default output fills the receiver's shared TX buffer
+// @only: F9P,F9R
+const ubx_cfg_item_t CFG_I2COUTPROT_UBX = {"CFG_I2COUTPROT_UBX", 0x10720001, L, 1, NA};
+const ubx_cfg_item_t CFG_I2COUTPROT_NMEA = {"CFG_I2COUTPROT_NMEA", 0x10720002, L, 1, NA};
+const ubx_cfg_item_t CFG_SPIOUTPROT_UBX = {"CFG_SPIOUTPROT_UBX", 0x107a0001, L, 1, NA};
+const ubx_cfg_item_t CFG_SPIOUTPROT_NMEA = {"CFG_SPIOUTPROT_NMEA", 0x107a0002, L, 1, NA};
+
+// @only: F9P
+const ubx_cfg_item_t CFG_I2COUTPROT_RTCM3X = {"CFG_I2COUTPROT_RTCM3X", 0x10720004, L, 1, NA};
+const ubx_cfg_item_t CFG_SPIOUTPROT_RTCM3X = {"CFG_SPIOUTPROT_RTCM3X", 0x107a0004, L, 1, NA};
+
 // cfg i2c - I2C interface configuration
 // @only: X20P
 const ubx_cfg_item_t CFG_I2C_PULL_UPS_DISABLED =
@@ -315,6 +327,26 @@ const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_ODO_USB =
 const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_PL_USB =
 {"CFG_MSGOUT_UBX_NAV_PL_USB", 0x20910418, U1, 0, NA};
 // end NAV-PL restriction - following MSGOUT items apply to all families
+// NMEA output rates on USB: GGA for a VRS NTRIP client through the pty link, the rest are
+// factory-default sentences the VRS rover profile switches off
+// @only: F9P,F9R
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_GGA_USB =
+{"CFG_MSGOUT_NMEA_ID_GGA_USB", 0x209100bd, U1, 0, NA};
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_GLL_USB =
+{"CFG_MSGOUT_NMEA_ID_GLL_USB", 0x209100cc, U1, 0, NA};
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_GSA_USB =
+{"CFG_MSGOUT_NMEA_ID_GSA_USB", 0x209100c2, U1, 0, NA};
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_GSV_USB =
+{"CFG_MSGOUT_NMEA_ID_GSV_USB", 0x209100c7, U1, 0, NA};
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_RMC_USB =
+{"CFG_MSGOUT_NMEA_ID_RMC_USB", 0x209100ae, U1, 0, NA};
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_VTG_USB =
+{"CFG_MSGOUT_NMEA_ID_VTG_USB", 0x209100b3, U1, 0, NA};
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_GST_USB =
+{"CFG_MSGOUT_NMEA_ID_GST_USB", 0x209100d6, U1, 0, NA};
+const ubx_cfg_item_t CFG_MSGOUT_NMEA_ID_ZDA_USB =
+{"CFG_MSGOUT_NMEA_ID_ZDA_USB", 0x209100db, U1, 0, NA};
+// end NMEA restriction - following MSGOUT items apply to all families
 const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_ORB_USB =
 {"CFG_MSGOUT_UBX_NAV_ORB_USB", 0x20910013, U1, 0, NA};
 const ubx_cfg_item_t CFG_MSGOUT_UBX_NAV_SAT_USB =
@@ -475,6 +507,12 @@ ubx_cfg_item_map_t ubxKeyCfgItemMap = {
   {CFG_USBOUTPROT_UBX.ubx_key_id, CFG_USBOUTPROT_UBX},
   {CFG_USBOUTPROT_NMEA.ubx_key_id, CFG_USBOUTPROT_NMEA},
   {CFG_USBOUTPROT_RTCM3X.ubx_key_id, CFG_USBOUTPROT_RTCM3X},
+  {CFG_I2COUTPROT_UBX.ubx_key_id, CFG_I2COUTPROT_UBX},
+  {CFG_I2COUTPROT_NMEA.ubx_key_id, CFG_I2COUTPROT_NMEA},
+  {CFG_I2COUTPROT_RTCM3X.ubx_key_id, CFG_I2COUTPROT_RTCM3X},
+  {CFG_SPIOUTPROT_UBX.ubx_key_id, CFG_SPIOUTPROT_UBX},
+  {CFG_SPIOUTPROT_NMEA.ubx_key_id, CFG_SPIOUTPROT_NMEA},
+  {CFG_SPIOUTPROT_RTCM3X.ubx_key_id, CFG_SPIOUTPROT_RTCM3X},
   {CFG_I2C_PULL_UPS_DISABLED.ubx_key_id, CFG_I2C_PULL_UPS_DISABLED},
   {CFG_SPARTN_USE_SOURCE.ubx_key_id, CFG_SPARTN_USE_SOURCE},
   {CFG_TMODE_MODE.ubx_key_id, CFG_TMODE_MODE},
@@ -575,6 +613,14 @@ ubx_cfg_item_map_t ubxKeyCfgItemMap = {
   {CFG_MSGOUT_UBX_NAV_ODO_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_ODO_USB},
   {CFG_MSGOUT_UBX_NAV_ORB_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_ORB_USB},
   {CFG_MSGOUT_UBX_NAV_PL_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_PL_USB},
+  {CFG_MSGOUT_NMEA_ID_GGA_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_GGA_USB},
+  {CFG_MSGOUT_NMEA_ID_GLL_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_GLL_USB},
+  {CFG_MSGOUT_NMEA_ID_GSA_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_GSA_USB},
+  {CFG_MSGOUT_NMEA_ID_GSV_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_GSV_USB},
+  {CFG_MSGOUT_NMEA_ID_RMC_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_RMC_USB},
+  {CFG_MSGOUT_NMEA_ID_VTG_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_VTG_USB},
+  {CFG_MSGOUT_NMEA_ID_GST_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_GST_USB},
+  {CFG_MSGOUT_NMEA_ID_ZDA_USB.ubx_key_id, CFG_MSGOUT_NMEA_ID_ZDA_USB},
   {CFG_MSGOUT_UBX_NAV_SAT_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_SAT_USB},
   {CFG_MSGOUT_UBX_NAV_SIG_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_SIG_USB},
   {CFG_MSGOUT_UBX_NAV_PVT_USB.ubx_key_id, CFG_MSGOUT_UBX_NAV_PVT_USB},

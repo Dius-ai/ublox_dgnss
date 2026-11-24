@@ -1,0 +1,7 @@
+# u-blox USB receivers for ublox_dgnss (libusb): read/write for group plugdev on the USB device
+# node itself (/dev/bus/usb/BBB/DDD), and ModemManager keeps away.
+# Install: sudo cp 99-ublox-dgnss.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+# ZED-F9P / ZED-F9R
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1546", ATTR{idProduct}=="01a9", GROUP="plugdev", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"
+# ZED-X20P
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1546", ATTR{idProduct}=="01ab", GROUP="plugdev", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"

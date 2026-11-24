@@ -47,6 +47,8 @@ add_library(ublox_dgnss_components SHARED
   src/parameters.cpp
   src/device_family.cpp
   src/ubx_config_loader.cpp
+  src/stream_parser.cpp
+  src/pty_link.cpp
 )
 
 target_compile_definitions(ublox_dgnss_components
@@ -86,6 +88,12 @@ if(BUILD_TESTING)
   # uncomment the line when this package is not in a git repo
   #set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_stream_parser test/test_stream_parser.cpp src/stream_parser.cpp)
+  target_include_directories(test_stream_parser PRIVATE include)
+  ament_add_gtest(test_pty_link test/test_pty_link.cpp src/pty_link.cpp)
+  target_include_directories(test_pty_link PRIVATE include)
 endif()
 
 ament_package()

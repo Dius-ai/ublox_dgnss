@@ -340,6 +340,27 @@ ros2 launch ublox_dgnss ntrip_client.launch.py use_https:=true host:=ntrip.data.
 
 Note the launch file has been configured to also use environment variables `NTRIP_USERNAME` & `NTRIP_PASSWORD` such that you dont need credentials in the launch scripts.
 
+# VRS corrections through a pty link
+
+This client does not send GGA, so VRS / network mountpoints (which need the rover position) send
+nothing. For those, set `PTY_LINK_PATH`: the driver then creates a pseudo-terminal there that a
+serial NTRIP client opens as if it were the receiver. The receiver's NMEA GGA is written to it, and
+whatever the client writes (RTCM 3) is forwarded to the receiver over USB, without passing through
+ROS. Unset (default), the driver behaves as before.
+
+With the pty link active, USB input is split by a stream parser (UBX, NMEA, RTCM 3; several
+messages per USB transfer or one message across transfers) instead of one message per transfer,
+and every 30 s a summary of GGA sent and corrections forwarded is logged.
+
+``` zsh
+# ZED-F9P VRS rover profile: USB-only output, GGA at 1 Hz, RTK fixed mode, NAV-PL; pty at
+# $XDG_RUNTIME_DIR/ublox_dgnss, /ntrip_client/rtcm subscription off
+ros2 launch ublox_dgnss ublox_rover_vrs.launch.py
+
+# the same + rtv_ntrip_bridge (SKPOS VRS) and its ntrip_client_node, from rtv_gnss_ntrip_client
+ublox_dgnss/shell/ublox_vrs_bringup.sh
+```
+
 # Fixed Base and Rover
 
 This package supports the use case where a fixed base station is setup to emit RTCM data and a moving rover consumes the emitted RTCM data for improved location accuracy as it moves. The base is setup to perform the survey-in procedure and, once finished, emit RTCM messages.
