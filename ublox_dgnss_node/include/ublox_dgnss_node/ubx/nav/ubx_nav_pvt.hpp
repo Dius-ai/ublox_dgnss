@@ -90,6 +90,10 @@ struct additional_flags_2_t
     struct
     {
       l_t invalidLLH : 1;                   // 1 = invalid lon, lat, height, hMSL
+      // TODO(review): New - age of the most recently received differential correction
+      // (0 none, 1..12 = <1, 1-2, 2-5, 5-10, 10-15, 15-20, 20-30, 30-45, 45-60, 60-90, 90-120 s,
+      // >= 120 s), flags3 bits 1-4 (in the low byte that is read)
+      u1_t lastCorrectionAge : 4;
     } bits;
   };
 };
@@ -235,6 +239,7 @@ public:
     oss << " pDOP: " << +pDOP * 0.01;
     oss << std::setprecision(0);
     oss << " invalidLlh: " << +flags3.bits.invalidLLH;
+    oss << " lastCorrectionAge: " << +flags3.bits.lastCorrectionAge;
     oss << std::setprecision(5);
     oss << " headVeh: " << +headVeh * 1e-5;
     oss << std::setprecision(2);

@@ -14,6 +14,7 @@
   <depend>ublox_ubx_interfaces</depend>
   <depend>ublox_dgnss_node</depend>
   <depend>ublox_nav_sat_fix_hp_node</depend>
+  <exec_depend>ublox_rtv_outputs</exec_depend>
   <depend>ntrip_client_node</depend>
 
   <export>

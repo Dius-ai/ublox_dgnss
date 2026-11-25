@@ -24,6 +24,7 @@
 #include <map>
 #include <algorithm>
 #include <atomic>
+#include <array>
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_components/register_node_macro.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
@@ -83,6 +84,8 @@
 #include "ublox_ubx_interfaces/srv/reset_odo.hpp"
 
 #include "rtcm_msgs/msg/message.hpp"
+#include "nmea_msgs/msg/sentence.hpp"
+#include "rtv_gnss_utils/msg/receiver_raw_data.hpp"
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
@@ -447,6 +450,8 @@ public:
 
     // TODO(review): New opt-in pty link (PTY_LINK_PATH) for serial NTRIP clients (VRS)
     setup_pty_link();
+    // TODO(review): New opt-in raw byte stream and NMEA outputs
+    setup_raw_and_nmea_outputs();
 
     RCLCPP_DEBUG(get_logger(), "initialising all ublox configuration parameters...");
     ublox_init_all_cfg_params();
@@ -684,6 +689,19 @@ private:
   uint64_t pty_bytes_to_device_ = 0;
   uint64_t pty_bytes_dropped_ = 0;
   bool usb_pty_detached_logged_ = false;
+
+  // TODO(review): New opt-in outputs, both off by default.
+  // RAW_OUTPUT_ENABLED: every USB transfer from the receiver and every RTCM write to it, as
+  // rtv_gnss_utils/ReceiverRawData on receiver_raw (a bag of it can be decoded again offline).
+  // NMEA_OUTPUT_ENABLED: every NMEA sentence on nmea; needs the stream parser, which is then
+  // created even without the pty link.
+  const std::string RAW_OUTPUT_ENABLED_PARAM_NAME = "RAW_OUTPUT_ENABLED";
+  const std::string NMEA_OUTPUT_ENABLED_PARAM_NAME = "NMEA_OUTPUT_ENABLED";
+  rclcpp::Publisher<rtv_gnss_utils::msg::ReceiverRawData>::SharedPtr receiver_raw_pub_;
+  rclcpp::Publisher<nmea_msgs::msg::Sentence>::SharedPtr nmea_pub_;
+  mutable std::mutex raw_mutex_;  // raw output is published from the USB, pty and RTCM threads
+  mutable std::array<uint64_t, 2> raw_offset_{};  // per ReceiverRawData direction
+  mutable uint32_t raw_session_ = 0;  // incremented at each USB (re)connect
 
 // once the usb is initialised this timer is disabled
   rclcpp::TimerBase::SharedPtr usb_init_timer_;
@@ -1598,6 +1616,12 @@ public:
 
     try {
       usbc_->write_buffer(data_out.data(), data_out.size());
+      // TODO(review): New opt-in raw output of the corrections sent to the receiver
+      if (receiver_raw_pub_) {
+        publish_raw(
+          rtv_gnss_utils::msg::ReceiverRawData::TO_RECEIVER, rclcpp::Clock().now(),
+          data_out.data(), data_out.size());
+      }
     } catch (const usb::UsbException & e) {
       RCLCPP_WARN(get_logger(), "RTCM write failed: %s", e.what());
     }
@@ -1645,6 +1669,11 @@ public:
       }
     }
     */
+
+    // TODO(review): New opt-in raw output of each transfer, before any parsing
+    if (receiver_raw_pub_ && len > 0) {
+      publish_raw(rtv_gnss_utils::msg::ReceiverRawData::FROM_RECEIVER, ts, buf, len);
+    }
 
     // TODO(review): New stream parsing while the pty link is active: a USB transfer may hold
     // several messages or part of one, and the GGA for the NTRIP client must not be lost.
@@ -1779,7 +1808,14 @@ public:
       case ublox_dgnss::StreamFrame::Kind::NMEA: {
           const std::string sentence(f.bytes.begin(), f.bytes.end());
           RCLCPP_DEBUG(get_logger(), "nmea: %s", sentence.c_str());
-          if (ublox_dgnss::nmea_sentence_type(sentence) == "GGA") {
+          if (nmea_pub_) {
+            nmea_msgs::msg::Sentence msg;
+            msg.header.stamp = stream_rx_ts_;
+            msg.header.frame_id = frame_id_;
+            msg.sentence = sentence;
+            nmea_pub_->publish(msg);
+          }
+          if (pty_.is_open() && ublox_dgnss::nmea_sentence_type(sentence) == "GGA") {
             send_gga_to_pty(sentence);
           }
           break;
@@ -1812,6 +1848,51 @@ public:
     }
   }
 
+  // TODO(review): New opt-in receiver_raw and nmea outputs (see RAW_OUTPUT_ENABLED_PARAM_NAME).
+  UBLOX_DGNSS_NODE_LOCAL
+  void setup_raw_and_nmea_outputs()
+  {
+    for (const auto & name : {RAW_OUTPUT_ENABLED_PARAM_NAME, NMEA_OUTPUT_ENABLED_PARAM_NAME}) {
+      if (!this->has_parameter(name)) {
+        this->declare_parameter<bool>(name, false);
+      }
+    }
+    if (this->get_parameter(RAW_OUTPUT_ENABLED_PARAM_NAME).as_bool()) {
+      // Reliable and deep: a bag of the raw stream is only useful without gaps.
+      receiver_raw_pub_ = this->create_publisher<rtv_gnss_utils::msg::ReceiverRawData>(
+        "receiver_raw", rclcpp::QoS(rclcpp::KeepLast(500)).reliable());
+      RCLCPP_INFO(get_logger(), "raw receiver stream on %s", receiver_raw_pub_->get_topic_name());
+    }
+    if (this->get_parameter(NMEA_OUTPUT_ENABLED_PARAM_NAME).as_bool()) {
+      nmea_pub_ = this->create_publisher<nmea_msgs::msg::Sentence>("nmea", 10);
+      if (!stream_parser_) {
+        stream_parser_ = std::make_unique<ublox_dgnss::StreamParser>(
+          std::bind(&UbloxDGNSSNode::on_stream_frame, this, std::placeholders::_1));
+      }
+      RCLCPP_INFO(get_logger(), "NMEA sentences on %s", nmea_pub_->get_topic_name());
+    }
+  }
+
+  UBLOX_DGNSS_NODE_LOCAL
+  void publish_raw(
+    uint8_t direction, const rclcpp::Time & ts, const uint8_t * data,
+    size_t len) const
+  {
+    using rtv_gnss_utils::msg::ReceiverRawData;
+    ReceiverRawData msg;
+    msg.header.stamp = ts;
+    msg.header.frame_id = frame_id_;
+    msg.direction = direction;
+    msg.protocols = direction == ReceiverRawData::FROM_RECEIVER ? "UBX,NMEA,RTCM3" : "RTCM3";
+    msg.data.assign(data, data + len);
+    // offset and publish under one lock, so the offsets in the bag increase in publish order
+    const std::lock_guard<std::mutex> lock(raw_mutex_);
+    msg.offset = raw_offset_[direction];
+    raw_offset_[direction] += len;
+    msg.session = raw_session_;
+    receiver_raw_pub_->publish(msg);
+  }
+
   // Forwards what the NTRIP client wrote (RTCM 3) to the receiver; dropped while the receiver is
   // away, as stale corrections are of no use once it is back.
   UBLOX_DGNSS_NODE_LOCAL
@@ -1840,6 +1921,10 @@ public:
       }
       try {
         usbc_->write_buffer(buf, n);
+        if (receiver_raw_pub_) {
+          publish_raw(
+            rtv_gnss_utils::msg::ReceiverRawData::TO_RECEIVER, rclcpp::Clock().now(), buf, n);
+        }
         if (pty_bytes_to_device_ == 0) {
           RCLCPP_INFO(get_logger(), "pty link: first corrections forwarded to the receiver");
         }
@@ -1925,6 +2010,13 @@ public:
   void hotplug_attach_callback()
   {
     device_attached_ = true;
+
+    // TODO(review): New - raw output byte offsets count from each (re)connect
+    {
+      const std::lock_guard<std::mutex> lock(raw_mutex_);
+      ++raw_session_;
+      raw_offset_ = {};
+    }
 
     bool is_reconnection = has_been_connected_before_;
 
@@ -3245,6 +3337,8 @@ private:
     msg->head_veh = payload->headVeh;
     msg->mag_dec = payload->magDec;
     msg->mag_acc = payload->magAcc;
+    // TODO(review): New field
+    msg->last_correction_age = payload->flags3.bits.lastCorrectionAge;
 
     ubx_nav_pvt_pub_->publish(*msg);
   }

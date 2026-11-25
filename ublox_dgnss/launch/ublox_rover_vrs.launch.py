@@ -9,6 +9,10 @@ to the receiver over USB. Corrections therefore do not pass through ROS, and the
 Receiver profile: output on USB only (UART1/UART2/I2C/SPI silenced, their factory-default NMEA
 fills the shared TX buffer at higher rates), UBX + RTCM 3 in, UBX + NMEA GGA out, RTK fixed
 mode, every-epoch navigation messages plus NAV-PL protection levels.
+
+Outputs of the rtv_gnss ZED-F9P driver, under /<outputs_node_name> (default /zed_f9p):
+navsatfix, gpsfix, twist, time_reference, rtk_status, /diagnostics from ublox_rtv_outputs, and
+raw (every byte to and from the receiver) and nmea from the driver itself.
 """
 import launch
 from launch.actions import DeclareLaunchArgument
@@ -30,6 +34,9 @@ def generate_launch_description():
   one_hz_divider = LaunchConfiguration('one_hz_divider')
   dyn_model = LaunchConfiguration('dyn_model')
   rtcm_input_enabled = LaunchConfiguration('rtcm_input_enabled')
+  outputs_node_name = LaunchConfiguration('outputs_node_name')
+  raw_output = LaunchConfiguration('raw_output')
+  nmea_output = LaunchConfiguration('nmea_output')
 
   args = [
     DeclareLaunchArgument('log_level', default_value=TextSubstitution(text='INFO')),
@@ -57,6 +64,15 @@ def generate_launch_description():
     DeclareLaunchArgument(
       'rtcm_input_enabled', default_value='false',
       description='Also accept RTCM from /ntrip_client/rtcm (off: corrections come via the pty)'),
+    DeclareLaunchArgument(
+      'outputs_node_name', default_value='zed_f9p',
+      description='Name of the ublox_rtv_outputs node; its topics and raw/nmea go under it'),
+    DeclareLaunchArgument(
+      'raw_output', default_value='true',
+      description='Publish every byte to and from the receiver (rtv_gnss_utils/ReceiverRawData)'),
+    DeclareLaunchArgument(
+      'nmea_output', default_value='true',
+      description='Publish the NMEA sentences the receiver outputs (GGA)'),
   ]
 
   params = [{
@@ -65,6 +81,8 @@ def generate_launch_description():
     'FRAME_ID': frame_id,
     'PTY_LINK_PATH': pty_link,
     'RTCM_INPUT_ENABLED': ParameterValue(rtcm_input_enabled, value_type=bool),
+    'RAW_OUTPUT_ENABLED': ParameterValue(raw_output, value_type=bool),
+    'NMEA_OUTPUT_ENABLED': ParameterValue(nmea_output, value_type=bool),
 
     # output on USB only
     'CFG_UART1OUTPROT_UBX': False,
@@ -129,7 +147,11 @@ def generate_launch_description():
         plugin='ublox_dgnss::UbloxDGNSSNode',
         name='ublox_dgnss',
         namespace=namespace,
-        parameters=params
+        parameters=params,
+        remappings=[
+          ('receiver_raw', ['/', outputs_node_name, '/raw']),
+          ('nmea', ['/', outputs_node_name, '/nmea']),
+        ]
       )
     ]
   )
@@ -146,7 +168,18 @@ def generate_launch_description():
         plugin='ublox_nav_sat_fix_hp::UbloxNavSatHpFixNode',
         name='ublox_nav_sat_fix_hp',
         namespace=namespace
-      )
+      ),
+      ComposableNode(
+        package='ublox_rtv_outputs',
+        plugin='ublox_rtv_outputs::RtvOutputsNode',
+        name=outputs_node_name,
+        namespace=namespace,
+        parameters=[{
+          'frame_id': '',  # empty: the driver's FRAME_ID
+          'velocity_frame_id': 'enu',
+          'use_gnss_time': False,
+        }]
+      ),
     ]
   )
 

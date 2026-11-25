@@ -44,3 +44,6 @@ int32 head_veh        # deg scale 1e-5 - Heading of vehicle (2-D), this is only 
                       # otherwise the output is set to the heading of motion
 int16 mag_dec         # deg scale 1e-2 - Magnetic declination. Only supported in ADR 4.10 and later
 uint16 mag_acc        # deg scale ie-2 - Mangetic declination accuracy. Only supported in ADR 4.10 and later
+uint8 last_correction_age  # age of the latest differential correction: 0 none, 1 < 1 s, 2 1-2 s,
+                           # 3 2-5, 4 5-10, 5 10-15, 6 15-20, 7 20-30, 8 30-45, 9 45-60, 10 60-90,
+                           # 11 90-120, 12 >= 120 s

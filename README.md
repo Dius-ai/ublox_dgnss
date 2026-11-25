@@ -361,6 +361,38 @@ ros2 launch ublox_dgnss ublox_rover_vrs.launch.py
 ublox_dgnss/shell/ublox_vrs_bringup.sh
 ```
 
+# rtv_gnss outputs (ublox_rtv_outputs)
+
+The `ublox_rtv_outputs` node subscribes to `/ubx_nav_pvt`, `/ubx_nav_hp_pos_llh`, `/ubx_nav_cov`,
+`/ubx_nav_dop`, `/ubx_nav_eoe`, `/ubx_nav_sat`, `/ubx_nav_status` and `/ubx_rxm_rtcm`. It groups
+them into navigation epochs (closed by NAV-EOE) and publishes the outputs of the rtv_gnss ZED-F9P
+driver. The VRS launch file names it `zed_f9p` (`outputs_node_name`), so the topics are the same as
+with that driver:
+
+| Topic | Type | Content |
+|---|---|---|
+| `~/navsatfix` | `sensor_msgs/NavSatFix` | HPPOSLLH position, NAV-COV covariance in ENU; status GBAS for DGNSS/RTK |
+| `~/gpsfix` | `gps_msgs/GPSFix` | the same + RTK float/fixed status, DOPs, speed, course, satellites |
+| `~/twist` | `geometry_msgs/TwistWithCovarianceStamped` | Doppler velocity in ENU axes (`velocity_frame_id`), no angular velocity |
+| `~/time_reference` | `sensor_msgs/TimeReference` | GNSS UTC of the epoch vs the host time |
+| `~/rtk_status` | `rtv_gnss_utils/RtkStatus` | fix class (none/single/DGNSS/float/fixed), accuracies, DOPs, correction age, RTCM counters |
+| `/diagnostics` | | navigation (epoch rate), position (fix), corrections (RTCM used by the receiver) |
+
+Parameters: `frame_id` (empty: the driver's `FRAME_ID`), `velocity_frame_id` (`enu`),
+`use_gnss_time` (stamp with GNSS UTC instead of the host time), `publish.<topic>` (all `true`),
+`max_correction_age_s` (10), `max_epoch_gap_s` (2), `epoch_timeout_s` (0.1).
+
+Two driver outputs complete the set, both off by default (the VRS launch turns them on and remaps
+them to `/zed_f9p/raw` and `/zed_f9p/nmea`):
+
+- `RAW_OUTPUT_ENABLED`: every USB transfer from the receiver and every RTCM write to it, on
+  `receiver_raw` (`rtv_gnss_utils/ReceiverRawData`, reliable). A bag of it can be decoded again
+  offline (e.g. RTKLIB); `offset` gaps show lost messages, `session` counts USB (re)connects.
+- `NMEA_OUTPUT_ENABLED`: every NMEA sentence on `nmea` (`nmea_msgs/Sentence`). This turns on the
+  stream parser even without the pty link.
+
+`ublox_dgnss_node` and `ublox_rtv_outputs` need `rtv_gnss_utils` (from rtv_gnss) in the workspace.
+
 # Fixed Base and Rover
 
 This package supports the use case where a fixed base station is setup to emit RTCM data and a moving rover consumes the emitted RTCM data for improved location accuracy as it moves. The base is setup to perform the survey-in procedure and, once finished, emit RTCM messages.

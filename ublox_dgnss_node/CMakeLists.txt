@@ -29,6 +29,8 @@ find_package(std_msgs REQUIRED)
 find_package(ublox_ubx_msgs REQUIRED)
 find_package(ublox_ubx_interfaces REQUIRED)
 find_package(rtcm_msgs REQUIRED)
+find_package(nmea_msgs REQUIRED)
+find_package(rtv_gnss_utils REQUIRED) # rtv_gnss package from dius git repo
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(libusb REQUIRED libusb-1.0)
@@ -60,7 +62,9 @@ target_link_options(ublox_dgnss_components PRIVATE
 )
 
 target_link_libraries(ublox_dgnss_components PUBLIC
+  ${nmea_msgs_TARGETS}
   ${rtcm_msgs_TARGETS}
+  ${rtv_gnss_utils_TARGETS}
   ${std_msgs_TARGETS}
   ${ublox_ubx_interfaces_TARGETS}
   ${ublox_ubx_msgs_TARGETS}
