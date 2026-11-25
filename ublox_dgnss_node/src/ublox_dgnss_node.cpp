@@ -1649,7 +1649,8 @@ public:
 
     rclcpp::Time ts = rclcpp::Clock().now();
 
-    const char * remove_any_of = "\n\r";
+    // TODO(review): Unused since the NMEA log below trims a std::string copy
+    // const char * remove_any_of = "\n\r";
 
     size_t len = transfer_in->actual_length;
     unsigned char * buf = transfer_in->buffer;
@@ -1708,6 +1709,7 @@ public:
     if (len > 0) {
       // NMEA string starts with a $
       if (buf[0] == 0x24) {
+        /* TODO(review): Original - buf[len] is one past the end when the transfer filled the buffer
         buf[len] = 0;
         for (size_t i = len - 2; i < len; i++) {
           if (strchr(remove_any_of, buf[i])) {
@@ -1715,6 +1717,13 @@ public:
           }
         }
         RCLCPP_INFO(get_logger(), "nmea: %s", buf);
+        */
+        // TODO(review): Copy instead of NUL-terminating the USB buffer in place
+        std::string nmea(reinterpret_cast<const char *>(buf), len);
+        while (!nmea.empty() && (nmea.back() == '\r' || nmea.back() == '\n')) {
+          nmea.pop_back();
+        }
+        RCLCPP_INFO(get_logger(), "nmea: %s", nmea.c_str());
       } else {
         // UBX starts with 0x65 0x62
         if (len > 2 && buf[0] == ubx::UBX_SYNC_CHAR_1 && buf[1] == ubx::UBX_SYNC_CHAR_2) {

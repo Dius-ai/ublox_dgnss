@@ -64,14 +64,32 @@ stop() {
 trap stop INT TERM
 
 # A symlink left by a driver that was killed (SIGKILL, crash) may point at a /dev/pts/N that now
-# belongs to another terminal, and the bridge would open that. Remove it unless a running process
-# of ours still holds the pty (the driver keeps the slave side open); then any link that appears
-# is the new one.
+# belongs to another terminal, and the bridge would open that. Remove it unless a running driver
+# still serves the pty; then any link that appears is the new one.
+# TODO(review): Original check, true for any process with the slave open - also the shell of a
+# terminal that reused /dev/pts/N (often this script's own terminal), so it refused the stale case.
+# pty_held() {
+#   local target fd
+#   target="$(readlink "${PTY_LINK}")" || return 1
+#   for fd in /proc/[0-9]*/fd/*; do
+#     [[ "$(readlink "${fd}" 2>/dev/null)" == "${target}" ]] && return 0
+#   done
+#   return 1
+# }
+# TODO(review): New check: the MASTER side of /dev/pts/N (ptmx fd with tty-index N) is held by a
+# ublox_dgnss process. A terminal that reused N has its master in the terminal emulator.
 pty_held() {
-  local target fd
+  local target index fd pid
   target="$(readlink "${PTY_LINK}")" || return 1
+  [[ "${target}" =~ ^/dev/pts/([0-9]+)$ ]] || return 1
+  index="${BASH_REMATCH[1]}"
   for fd in /proc/[0-9]*/fd/*; do
-    [[ "$(readlink "${fd}" 2>/dev/null)" == "${target}" ]] && return 0
+    case "$(readlink "${fd}" 2>/dev/null)" in /dev/ptmx | /dev/pts/ptmx) ;; *) continue ;; esac
+    pid="${fd#/proc/}"
+    pid="${pid%%/*}"
+    grep -qE "^tty-index:[[:space:]]*${index}\$" "/proc/${pid}/fdinfo/${fd##*/}" 2>/dev/null ||
+      continue
+    tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | grep -q ublox_dgnss && return 0
   done
   return 1
 }

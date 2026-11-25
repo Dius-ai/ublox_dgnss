@@ -36,6 +36,7 @@ struct AssemblerStats
   uint64_t epochs_without_eoe{0};  // returned before their NAV-EOE arrived
   uint64_t epochs_without_pvt{0};  // dropped: no NAV-PVT
   uint64_t late_messages{0};       // arrived after their epoch was returned
+  uint64_t time_jumps{0};          // iTOW went back more than kTimeJumpMs: assembler restarted
 };
 
 class EpochAssembler
@@ -56,6 +57,11 @@ public:
   std::vector<Epoch> flush(int64_t now_ns);
 
   const AssemblerStats & stats() const {return stats_;}
+
+  // TODO(review): A message this far behind the newest iTOW is not a late one (those lag by an
+  // epoch or two) but a receiver time jump (time fix after a pre-fix guess, cold reset, bag
+  // replayed in a loop): start over instead of dropping everything until time catches up.
+  static constexpr int64_t kTimeJumpMs = 30000;
 
 private:
   struct Pending

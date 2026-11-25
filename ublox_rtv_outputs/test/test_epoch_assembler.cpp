@@ -122,3 +122,23 @@ TEST(EpochAssembler, WeekRollover)
   EXPECT_EQ(out[0].itow, 0u);
   EXPECT_EQ(a.stats().late_messages, 0u);
 }
+
+TEST(EpochAssembler, TimeJumpBackRestarts)
+{
+  EpochAssembler a;
+  // pre-fix receiver time 2 days ahead of the real GNSS time
+  const uint32_t bogus = 400000000u;
+  a.add(pvt(bogus), 0);
+  ASSERT_EQ(a.add_eoe(bogus, stamp(), 0).size(), 1u);
+  a.add(pvt(bogus + 200), 0);
+  // time fix: iTOW drops back 2 days, epochs continue from there
+  const uint32_t real = bogus - 172800000u;
+  EXPECT_TRUE(a.add(pvt(real), 0).empty());
+  const auto out = a.add_eoe(real, stamp(), 0);
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(out[0].itow, real);
+  a.add(pvt(real + 200), 0);
+  EXPECT_EQ(a.add_eoe(real + 200, stamp(), 0).size(), 1u);
+  EXPECT_EQ(a.stats().late_messages, 0u);
+  EXPECT_EQ(a.stats().time_jumps, 1u);
+}

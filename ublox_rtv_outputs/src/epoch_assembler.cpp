@@ -101,7 +101,19 @@ int64_t EpochAssembler::unwrap(uint32_t itow)
 EpochAssembler::Pending * EpochAssembler::entry(
   uint32_t itow, const builtin_interfaces::msg::Time & stamp)
 {
+  /* TODO(review): Original: a backward time jump made every message "late" until time caught up
   const int64_t key = unwrap(itow);
+  */
+  // TODO(review): New implementation restarting the assembler on a backward time jump
+  int64_t key = unwrap(itow);
+  if (ref_ - key > kTimeJumpMs) {
+    ++stats_.time_jumps;
+    pending_.clear();
+    have_ref_ = false;
+    have_last_ = false;
+    expect_hp_ = expect_cov_ = expect_dop_ = false;
+    key = unwrap(itow);
+  }
   if (have_last_ && key <= last_key_) {
     ++stats_.late_messages;
     return nullptr;

@@ -228,6 +228,7 @@ private:
     d.add("epochs closed without NAV-EOE", s.epochs_without_eoe);
     d.add("epochs dropped without NAV-PVT", s.epochs_without_pvt);
     d.add("messages after their epoch was published", s.late_messages);
+    d.add("receiver time jumps back", s.time_jumps);  // TODO(review): new diagnostic
     const double age = seconds_since(last_epoch_);
     if (age < 0) {
       d.summary(DiagStatus::ERROR, "no navigation epochs yet from " + std::string(
