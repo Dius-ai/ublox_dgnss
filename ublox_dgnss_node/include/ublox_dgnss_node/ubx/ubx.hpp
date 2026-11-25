@@ -112,7 +112,12 @@ using FramePoll = Frame;
 using FramePolled = Frame;
 using FrameValSet = Frame;
 
+/* TODO(review): Original non-inline definition in a header commented out: every .cpp that
+   includes the header defined it again (link error hidden by --allow-multiple-definition)
 std::shared_ptr<FramePolled> get_polled_frame(
+*/
+// TODO(review): New - inline (C++17): a single definition however many .cpp include it
+inline std::shared_ptr<FramePolled> get_polled_frame(
   std::shared_ptr<usb::Connection> usbc,
   std::shared_ptr<FramePoll> poll_frame)
 {

@@ -45,15 +45,17 @@ if [[ -n "${FAKE_POSITION:-}" ]]; then
 fi
 
 # Job control: without it, bash starts background jobs with SIGINT ignored and ros2 launch could
-# not be stopped. With it, each launch gets its own process group, and stop() sends that group
-# SIGINT, as Ctrl+C would. Their stdin is /dev/null: a background job touching the terminal is
-# stopped by the kernel.
+# not be stopped. With it, each launch gets its own process group (Ctrl+C reaches only this
+# script), and stop() sends SIGINT to each ros2 launch, which forwards it once to its processes.
+# Not to the whole group: every process would get SIGINT twice, and a second SIGINT while a
+# component container exits can crash it (segfault in rclcpp's signal handling). Their stdin is
+# /dev/null: a background job touching the terminal is stopped by the kernel.
 set -m
 pids=()
 stop() {
   trap - INT TERM
   echo "ublox_vrs_bringup: stopping"
-  for pid in "${pids[@]}"; do kill -INT -- "-${pid}" 2>/dev/null; kill -CONT -- "-${pid}" 2>/dev/null; done
+  for pid in "${pids[@]}"; do kill -CONT -- "-${pid}" 2>/dev/null; kill -INT "${pid}" 2>/dev/null; done
   # with job control, wait also returns when a job is merely stopped
   for pid in "${pids[@]}"; do while kill -0 "${pid}" 2>/dev/null; do wait "${pid}" 2>/dev/null; done; done
   rm -f "${bridge_config}"

@@ -126,7 +126,13 @@ public:
     // used to indicate if threads and timers should shut down
     keep_running_ = true;
 
+    /* TODO(review): Original registration commented out: the hook was never removed, so it could run
+       on a destroyed node, or at the same time as the destructor (both closing the USB handle)
     this->get_node_base_interface()->get_context()->on_shutdown(
+    */
+    // TODO(review): New - keep the handle; the destructor removes the hook first
+    on_shutdown_handle_ =
+      this->get_node_base_interface()->get_context()->add_on_shutdown_callback(
       [this]() {
         RCLCPP_INFO(this->get_logger(), "Initiating shutdown ...");
         this->keep_running_ = false;
@@ -464,6 +470,12 @@ public:
   UBLOX_DGNSS_NODE_LOCAL
   ~UbloxDGNSSNode()
   {
+    // TODO(review): New - remove the on_shutdown hook before tearing down. rclcpp runs the hooks
+    // under the mutex this call takes, so a hook already running (rclcpp signal thread) finishes
+    // first; afterwards it can no longer run on this destroyed node.
+    this->get_node_base_interface()->get_context()->remove_on_shutdown_callback(
+      on_shutdown_handle_);
+
     keep_running_ = false;
     if (usbc_) {
       usbc_->shutdown();
@@ -675,6 +687,8 @@ private:
   // while the pty link is active; it runs on the libusb events thread (stream_mutex_ guards its
   // stats for the summary timer). The pty is read by pty_timer_ and written from the USB thread.
   const std::string PTY_LINK_PATH_PARAM_NAME = "PTY_LINK_PATH";
+  // TODO(review): New - handle of the context on_shutdown hook, removed by the destructor
+  rclcpp::OnShutdownCallbackHandle on_shutdown_handle_;
   rclcpp::CallbackGroup::SharedPtr callback_group_pty_timer_;
   rclcpp::TimerBase::SharedPtr pty_timer_;
   rclcpp::TimerBase::SharedPtr pty_summary_timer_;

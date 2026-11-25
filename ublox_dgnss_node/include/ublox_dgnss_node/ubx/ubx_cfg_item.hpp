@@ -24,7 +24,12 @@
 
 namespace ubx::cfg
 {
+/* TODO(review): Original non-inline definition in a header commented out: every .cpp that
+   includes the header defined it again (link error hidden by --allow-multiple-definition)
 size_t storage_size_bytes(u8_t storage_size_id)
+*/
+// TODO(review): New - inline (C++17): a single definition however many .cpp include it
+inline size_t storage_size_bytes(u8_t storage_size_id)
 {
   size_t size = 0;
   switch (storage_size_id) {

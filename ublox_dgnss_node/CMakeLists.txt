@@ -57,9 +57,12 @@ target_compile_definitions(ublox_dgnss_components
   PRIVATE "UBLOX_DGNSS_NODE_BUILDING_DLL"
 )
 
-target_link_options(ublox_dgnss_components PRIVATE
-  "LINKER:--allow-multiple-definition"
-)
+# TODO(review): Original commented out: it hid definitions in headers duplicated in every .cpp
+# (ubxKeyCfgItemMap was destroyed once per .cpp at exit); they are inline now, and the linker
+# should report the next one
+# target_link_options(ublox_dgnss_components PRIVATE
+#   "LINKER:--allow-multiple-definition"
+# )
 
 target_link_libraries(ublox_dgnss_components PUBLIC
   ${nmea_msgs_TARGETS}

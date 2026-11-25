@@ -988,6 +988,11 @@ void Connection::close_devh()
 
 void Connection::shutdown()
 {
+  // TODO(review): New - serialised: the node's on_shutdown hook (rclcpp signal thread) and its
+  // destructor (main thread) both call it at exit, and two concurrent libusb_close() of the same
+  // handle crashed or hung. The second call finds devh_ null and no hotplug handles left.
+  const std::lock_guard<std::mutex> lock(shutdown_mutex_);
+
   keep_running_ = false;
 
   // de register hotplug callbacks
@@ -1001,6 +1006,9 @@ void Connection::shutdown()
       libusb_hotplug_deregister_callback(ctx_, handle);
     }
   }
+  // TODO(review): New - deregistered once, not again by a later call
+  hp_attach_.clear();
+  hp_detach_.clear();
 
   close_devh();
 }

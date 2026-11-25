@@ -483,7 +483,14 @@ enum CFG_ITFM_ANTSETTING_ENUM
 };
 
 
+/* TODO(review): Original non-inline definition commented out: every .cpp that includes this
+   header constructed the map at the same (merged) address and registered its destructor, so at
+   exit it was destroyed once per .cpp: double free, "malloc_consolidate(): unaligned fastbin
+   chunk detected" or a segfault on shutdown
 ubx_cfg_item_map_t ubxKeyCfgItemMap = {
+*/
+// TODO(review): New - inline (C++17): one map, constructed and destroyed once
+inline ubx_cfg_item_map_t ubxKeyCfgItemMap = {
   {CFG_INFMSG_UBX_USB.ubx_key_id, CFG_INFMSG_UBX_USB},
   {CFG_INFMSG_NMEA_USB.ubx_key_id, CFG_INFMSG_NMEA_USB},
   {CFG_UART1INPROT_UBX.ubx_key_id, CFG_UART1INPROT_UBX},
@@ -684,7 +691,12 @@ ubx_cfg_item_map_t ubxKeyCfgItemMap = {
   // {CFG_ITFM_ENABLE_AUX.ubx_key_id, CFG_ITFM_ENABLE_AUX},
 };
 
+/* TODO(review): Original non-inline definition in a header commented out: every .cpp that
+   includes the header defined it again (link error hidden by --allow-multiple-definition)
 bool operator<(const ubx_key_id_t & fk1, const ubx_key_id_t & fk2)
+*/
+// TODO(review): New - inline (C++17): a single definition however many .cpp include it
+inline bool operator<(const ubx_key_id_t & fk1, const ubx_key_id_t & fk2)
 {
   return fk1.all < fk2.all;
 }
